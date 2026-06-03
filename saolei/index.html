@@ -1,0 +1,49 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>经典扫雷游戏</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body class="bg-gray-100">
+    <div class="container mx-auto px-4 py-8">
+        <header class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-blue-600">经典扫雷</h1>
+            <div class="flex justify-center items-center mt-4 space-x-6">
+                <div class="bg-white rounded-lg shadow-md p-4">
+                    <span class="text-gray-700">剩余雷数: </span>
+                    <span id="mine-count" class="font-bold text-red-500">10</span>
+                </div>
+                <button id="reset-btn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg transition duration-200">
+                    重新开始
+                </button>
+                <div class="bg-white rounded-lg shadow-md p-4">
+                    <span class="text-gray-700">用时: </span>
+                    <span id="timer" class="font-bold text-green-600">0</span>
+                </div>
+            </div>
+        </header>
+
+        <main class="flex justify-center">
+            <div id="game-board" class="bg-white rounded-lg shadow-xl overflow-hidden">
+                <!-- 游戏棋盘将通过JS动态生成 -->
+            </div>
+        </main>
+
+        <div class="mt-8 bg-white rounded-lg shadow-md p-6 max-w-2xl mx-auto">
+            <h2 class="text-xl font-semibold mb-4 text-gray-800">游戏规则</h2>
+            <ul class="list-disc pl-5 space-y-2 text-gray-700">
+                <li>点击格子揭开它，如果揭开的是地雷，游戏结束</li>
+                <li>数字表示周围8个格子中的地雷数量</li>
+                <li>右键点击格子可以标记疑似地雷的位置</li>
+                <li>标记所有地雷或揭开所有非地雷格子即可获胜</li>
+            </ul>
+        </div>
+    </div>
+
+    <script src="game.js"></script>
+</body>
+</html>
