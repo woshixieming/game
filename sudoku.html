@@ -1,0 +1,1277 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>数独 Sudoku</title>
+  <style>
+    /* ===== Reset & Base ===== */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', sans-serif;
+      background: #f8f9fa;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px 10px 40px;
+      color: #2d3748;
+    }
+
+    /* ===== Header ===== */
+    h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      margin-bottom: 14px;
+      color: #2d3748;
+    }
+    h1 span {
+      font-size: 0.9rem;
+      font-weight: 400;
+      color: #718096;
+      letter-spacing: 0.2em;
+      margin-left: 6px;
+      vertical-align: middle;
+    }
+
+    /* ===== Control Bar ===== */
+    .control-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: center;
+      margin-bottom: 18px;
+    }
+
+    .difficulty-group {
+      display: flex;
+      background: #e2e8f0;
+      border-radius: 8px;
+      padding: 3px;
+      gap: 2px;
+    }
+
+    .diff-btn {
+      padding: 6px 14px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      font-weight: 500;
+      background: transparent;
+      color: #718096;
+      transition: background 0.15s, color 0.15s;
+    }
+    .diff-btn.active {
+      background: #ffffff;
+      color: #2d3748;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+    }
+    .diff-btn:hover:not(.active) { background: rgba(255,255,255,0.5); }
+
+    .btn {
+      padding: 7px 16px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      font-weight: 500;
+      transition: background 0.15s, transform 0.08s;
+    }
+    .btn:active { transform: scale(0.96); }
+
+    .btn-primary {
+      background: #4a69bd;
+      color: #fff;
+    }
+    .btn-primary:hover { background: #3d5aa3; }
+
+    .btn-secondary {
+      background: #e2e8f0;
+      color: #2d3748;
+    }
+    .btn-secondary:hover { background: #cbd5e0; }
+
+    .btn-danger {
+      background: #fed7d7;
+      color: #c53030;
+    }
+    .btn-danger:hover { background: #feb2b2; }
+
+    .btn-note {
+      background: #e2e8f0;
+      color: #2d3748;
+      min-width: 96px;
+    }
+    .btn-note.active {
+      background: #4a69bd;
+      color: #fff;
+    }
+
+    /* ===== Timer & Status ===== */
+    .status-bar {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 12px;
+      font-size: 0.88rem;
+      color: #718096;
+    }
+    .timer { font-variant-numeric: tabular-nums; font-weight: 500; }
+    .mistake-count { color: #c53030; }
+
+    /* ===== Board Wrapper ===== */
+    .board-wrapper {
+      background: #ffffff;
+      border-radius: 14px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+      padding: 14px;
+      margin-bottom: 16px;
+    }
+
+    /* ===== Sudoku Board ===== */
+    #board {
+      display: grid;
+      grid-template-columns: repeat(9, 1fr);
+      grid-template-rows: repeat(9, 1fr);
+      width: min(450px, 90vw);
+      height: min(450px, 90vw);
+      border: 2.5px solid #2d3748;
+      border-radius: 4px;
+      overflow: hidden;
+      user-select: none;
+    }
+
+    /* ===== Individual Cell ===== */
+    .cell {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: clamp(1rem, 4vw, 1.5rem);
+      font-weight: 600;
+      border-right: 1px solid #cbd5e0;
+      border-bottom: 1px solid #cbd5e0;
+      background: #ffffff;
+      transition: background 0.1s;
+      /* Prevent text selection on double-click */
+      -webkit-user-select: none;
+      user-select: none;
+    }
+
+    /* Right border for 3rd and 6th columns (thick 3×3 boundary) */
+    .cell[data-col="2"], .cell[data-col="5"] {
+      border-right: 2.5px solid #2d3748;
+    }
+    /* Last column: no right border (board border handles it) */
+    .cell[data-col="8"] {
+      border-right: none;
+    }
+    /* Bottom border for 3rd and 6th rows */
+    .cell[data-row="2"], .cell[data-row="5"] {
+      border-bottom: 2.5px solid #2d3748;
+    }
+    /* Last row: no bottom border */
+    .cell[data-row="8"] {
+      border-bottom: none;
+    }
+
+    /* Cell highlight states */
+    .cell.highlight-related { background: #ebf8ff; }
+    .cell.highlight-same    { background: #fef3c7; }
+    .cell.highlight-selected { background: #bee3f8; }
+
+    /* Number colors */
+    .cell.clue   { color: #2d3748; }
+    .cell.user   { color: #4a69bd; }
+    .cell.error  { color: #e53e3e !important; }
+
+    /* ===== Notes Grid inside cell ===== */
+    .notes-grid {
+      position: absolute;
+      inset: 1px;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      grid-template-rows: repeat(3, 1fr);
+      pointer-events: none;
+    }
+    .note-digit {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: clamp(0.35rem, 1.4vw, 0.55rem);
+      font-weight: 500;
+      color: #718096;
+      line-height: 1;
+    }
+    .note-digit.empty { color: transparent; }
+
+    /* ===== Virtual Keyboard ===== */
+    .keyboard-section {
+      background: #ffffff;
+      border-radius: 14px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+      padding: 12px 14px;
+      width: min(480px, 95vw);
+    }
+
+    .numpad {
+      display: grid;
+      grid-template-columns: repeat(10, 1fr);
+      gap: 6px;
+      margin-bottom: 10px;
+    }
+
+    .num-btn {
+      aspect-ratio: 1;
+      border: none;
+      border-radius: 8px;
+      background: #edf2f7;
+      color: #2d3748;
+      font-size: clamp(0.9rem, 3vw, 1.2rem);
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.12s, transform 0.08s;
+    }
+    .num-btn:hover  { background: #e2e8f0; }
+    .num-btn:active { transform: scale(0.92); background: #cbd5e0; }
+    .num-btn.erase  { font-size: clamp(0.75rem, 2.5vw, 1rem); color: #e53e3e; background: #fff5f5; }
+    .num-btn.erase:hover { background: #fed7d7; }
+
+    /* Counts badge on num-btns */
+    .num-btn { position: relative; }
+    .num-count {
+      position: absolute;
+      bottom: 2px;
+      right: 3px;
+      font-size: 0.5rem;
+      font-weight: 400;
+      color: #a0aec0;
+      line-height: 1;
+    }
+
+    .action-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+    }
+
+    /* ===== Toast / Overlay ===== */
+    .overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.35);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+    }
+    .overlay.show { display: flex; }
+
+    .modal {
+      background: #ffffff;
+      border-radius: 16px;
+      padding: 32px 40px;
+      text-align: center;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.18);
+      max-width: 340px;
+      width: 90%;
+      animation: popIn 0.25s ease;
+    }
+    @keyframes popIn {
+      from { transform: scale(0.85); opacity: 0; }
+      to   { transform: scale(1);    opacity: 1; }
+    }
+    .modal-emoji { font-size: 3rem; margin-bottom: 10px; }
+    .modal-title { font-size: 1.5rem; font-weight: 700; margin-bottom: 8px; }
+    .modal-body  { color: #718096; font-size: 0.9rem; margin-bottom: 20px; }
+    .modal-time  { color: #4a69bd; font-weight: 600; font-size: 1.1rem; }
+
+    /* ===== Toast message ===== */
+    .toast {
+      position: fixed;
+      bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%) translateY(80px);
+      background: #2d3748;
+      color: #fff;
+      padding: 10px 22px;
+      border-radius: 20px;
+      font-size: 0.88rem;
+      font-weight: 500;
+      pointer-events: none;
+      transition: transform 0.3s ease, opacity 0.3s ease;
+      opacity: 0;
+      z-index: 200;
+    }
+    .toast.show {
+      transform: translateX(-50%) translateY(0);
+      opacity: 1;
+    }
+
+    /* ===== Responsive ===== */
+    @media (max-width: 480px) {
+      h1 { font-size: 1.5rem; }
+      .action-row { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body>
+
+<h1>数独 <span>SUDOKU</span></h1>
+
+<!-- Control bar: difficulty + new game -->
+<div class="control-bar">
+  <div class="difficulty-group">
+    <button class="diff-btn active" data-diff="easy">简单</button>
+    <button class="diff-btn"       data-diff="medium">中等</button>
+    <button class="diff-btn"       data-diff="hard">困难</button>
+  </div>
+  <button class="btn btn-primary" id="newGameBtn">新游戏</button>
+</div>
+
+<!-- Status: timer + mistakes -->
+<div class="status-bar">
+  <span>⏱ <span class="timer" id="timer">00:00</span></span>
+  <span class="mistake-count" id="mistakeDisplay"></span>
+</div>
+
+<!-- Board -->
+<div class="board-wrapper">
+  <div id="board"></div>
+</div>
+
+<!-- Virtual keyboard + action buttons -->
+<div class="keyboard-section">
+  <div class="numpad" id="numpad"></div>
+  <div class="action-row">
+    <button class="btn btn-note" id="noteBtn">✏️ 备注模式</button>
+    <button class="btn btn-secondary" id="undoBtn">↩ 撤销</button>
+    <button class="btn btn-secondary" id="hintBtn">💡 提示</button>
+    <button class="btn btn-danger"    id="checkBtn">🔍 检查</button>
+  </div>
+</div>
+
+<!-- Completion overlay -->
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <div class="modal-emoji">🎉</div>
+    <div class="modal-title">恭喜完成！</div>
+    <div class="modal-body">
+      你已成功解开数独！<br>
+      用时 <span class="modal-time" id="finalTime">—</span>
+    </div>
+    <button class="btn btn-primary" id="playAgainBtn" style="width:100%">再来一局</button>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+  'use strict';
+
+  /* ============================================================
+   * SECTION 1 — Sudoku Engine
+   * Backtracking generator + solver + hole-digger
+   * ============================================================ */
+
+  /**
+   * Shuffle an array in-place using Fisher-Yates.
+   * @param {number[]} arr
+   * @returns {number[]}
+   */
+  function shuffle(arr) {
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  }
+
+  /**
+   * Check whether placing `num` at (row, col) in `board` is valid.
+   * @param {number[][]} board - 9×9 grid (0 = empty)
+   * @param {number} row
+   * @param {number} col
+   * @param {number} num - 1..9
+   * @returns {boolean}
+   */
+  function isValid(board, row, col, num) {
+    // Row check
+    for (let c = 0; c < 9; c++) {
+      if (board[row][c] === num) return false;
+    }
+    // Column check
+    for (let r = 0; r < 9; r++) {
+      if (board[r][col] === num) return false;
+    }
+    // 3×3 box check
+    const br = Math.floor(row / 3) * 3;
+    const bc = Math.floor(col / 3) * 3;
+    for (let r = br; r < br + 3; r++) {
+      for (let c = bc; c < bc + 3; c++) {
+        if (board[r][c] === num) return false;
+      }
+    }
+    return true;
+  }
+
+  /**
+   * Fill `board` using randomised backtracking.
+   * @param {number[][]} board
+   * @returns {boolean}
+   */
+  function fillBoard(board) {
+    for (let r = 0; r < 9; r++) {
+      for (let c = 0; c < 9; c++) {
+        if (board[r][c] === 0) {
+          const nums = shuffle([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+          for (const n of nums) {
+            if (isValid(board, r, c, n)) {
+              board[r][c] = n;
+              if (fillBoard(board)) return true;
+              board[r][c] = 0;
+            }
+          }
+          return false;  // Backtrack
+        }
+      }
+    }
+    return true;  // All cells filled
+  }
+
+  /**
+   * Count the number of solutions for a given board.
+   * Stops counting after 2 (to determine uniqueness efficiently).
+   * @param {number[][]} board
+   * @param {{count: number}} counter
+   * @returns {void}
+   */
+  function countSolutions(board, counter) {
+    if (counter.count >= 2) return;
+
+    for (let r = 0; r < 9; r++) {
+      for (let c = 0; c < 9; c++) {
+        if (board[r][c] === 0) {
+          for (let n = 1; n <= 9; n++) {
+            if (isValid(board, r, c, n)) {
+              board[r][c] = n;
+              countSolutions(board, counter);
+              board[r][c] = 0;
+            }
+          }
+          return;  // Return after trying all nums for first empty cell
+        }
+      }
+    }
+    // No empty cells found → valid complete solution
+    counter.count++;
+  }
+
+  /**
+   * Deep-copy a 9×9 board.
+   * @param {number[][]} board
+   * @returns {number[][]}
+   */
+  function copyBoard(board) {
+    return board.map(row => [...row]);
+  }
+
+  /**
+   * Generate a new Sudoku puzzle.
+   * @param {'easy'|'medium'|'hard'} difficulty
+   * @returns {{ puzzle: number[][], solution: number[][] }}
+   */
+  function generatePuzzle(difficulty) {
+    // Step 1: Generate a fully solved board
+    const solution = Array.from({ length: 9 }, () => Array(9).fill(0));
+    fillBoard(solution);
+
+    // Step 2: Determine how many cells to remove
+    const removeCounts = { easy: 35, medium: 46, hard: 54 };
+    let toRemove = removeCounts[difficulty] || 35;
+
+    // Step 3: Dig holes while maintaining unique solution
+    const puzzle = copyBoard(solution);
+    const positions = shuffle(
+      Array.from({ length: 81 }, (_, i) => [Math.floor(i / 9), i % 9])
+    );
+
+    let removed = 0;
+    for (const [r, c] of positions) {
+      if (removed >= toRemove) break;
+      const backup = puzzle[r][c];
+      puzzle[r][c] = 0;
+
+      const test = copyBoard(puzzle);
+      const counter = { count: 0 };
+      countSolutions(test, counter);
+
+      if (counter.count === 1) {
+        removed++;
+      } else {
+        // Restoring because removing breaks uniqueness
+        puzzle[r][c] = backup;
+      }
+    }
+
+    return { puzzle, solution };
+  }
+
+  /* ============================================================
+   * SECTION 2 — Game State
+   * ============================================================ */
+
+  /** @type {'easy'|'medium'|'hard'} */
+  let currentDifficulty = 'easy';
+
+  /** @type {number[][]} 9×9 original puzzle (0=empty, 1-9=clue) */
+  let puzzle = [];
+
+  /** @type {number[][]} 9×9 complete solution */
+  let solution = [];
+
+  /** @type {number[][]} 9×9 current user values (0=empty, 1-9=filled) */
+  let board = [];
+
+  /** @type {boolean[][]} 9×9 clue flags */
+  let isClue = [];
+
+  /**
+   * Notes: notes[r][c] is a Set<number> of pencil-mark digits.
+   * @type {Set<number>[][]}
+   */
+  let notes = [];
+
+  /** @type {number} currently selected row (-1 if none) */
+  let selRow = -1;
+
+  /** @type {number} currently selected column (-1 if none) */
+  let selCol = -1;
+
+  /** @type {boolean} pencil-note mode */
+  let noteMode = false;
+
+  /** @type {boolean} show errors flag (after Check) */
+  let showErrors = false;
+
+  /** @type {boolean} game is complete */
+  let gameOver = false;
+
+  /**
+   * Undo history item.
+   * @typedef {{ r: number, c: number, prev: number, next: number, prevNotes: number[], nextNotes: number[] }} UndoEntry
+   */
+  /** @type {UndoEntry[]} */
+  let undoStack = [];
+
+  /** Timer state */
+  let timerInterval = null;
+  let timerSeconds = 0;
+  let mistakes = 0;
+
+  /* ============================================================
+   * SECTION 3 — DOM References
+   * ============================================================ */
+  const boardEl     = document.getElementById('board');
+  const numpadEl    = document.getElementById('numpad');
+  const noteBtn     = document.getElementById('noteBtn');
+  const undoBtnEl   = document.getElementById('undoBtn');
+  const hintBtnEl   = document.getElementById('hintBtn');
+  const checkBtnEl  = document.getElementById('checkBtn');
+  const newGameBtn  = document.getElementById('newGameBtn');
+  const overlay     = document.getElementById('overlay');
+  const finalTimeEl = document.getElementById('finalTime');
+  const timerEl     = document.getElementById('timer');
+  const mistakeEl   = document.getElementById('mistakeDisplay');
+  const playAgainBtn = document.getElementById('playAgainBtn');
+  const toastEl     = document.getElementById('toast');
+
+  /* ============================================================
+   * SECTION 4 — Timer Helpers
+   * ============================================================ */
+
+  /** Format seconds to mm:ss */
+  function formatTime(secs) {
+    const m = String(Math.floor(secs / 60)).padStart(2, '0');
+    const s = String(secs % 60).padStart(2, '0');
+    return `${m}:${s}`;
+  }
+
+  function startTimer() {
+    clearInterval(timerInterval);
+    timerSeconds = 0;
+    timerEl.textContent = '00:00';
+    timerInterval = setInterval(() => {
+      timerSeconds++;
+      timerEl.textContent = formatTime(timerSeconds);
+    }, 1000);
+  }
+
+  function stopTimer() {
+    clearInterval(timerInterval);
+  }
+
+  /* ============================================================
+   * SECTION 5 — Toast
+   * ============================================================ */
+
+  let toastTimeout = null;
+  /**
+   * Show a brief toast message.
+   * @param {string} msg
+   * @param {number} [duration=1800]
+   */
+  function showToast(msg, duration = 1800) {
+    toastEl.textContent = msg;
+    toastEl.classList.add('show');
+    clearTimeout(toastTimeout);
+    toastTimeout = setTimeout(() => toastEl.classList.remove('show'), duration);
+  }
+
+  /* ============================================================
+   * SECTION 6 — Board Rendering
+   * ============================================================ */
+
+  /**
+   * Build the 81 cell divs once (on init or new game).
+   */
+  function buildBoardDOM() {
+    boardEl.innerHTML = '';
+    for (let r = 0; r < 9; r++) {
+      for (let c = 0; c < 9; c++) {
+        const cell = document.createElement('div');
+        cell.className = 'cell';
+        cell.dataset.row = r;
+        cell.dataset.col = c;
+
+        // Notes grid (3×3 inner)
+        const notesGrid = document.createElement('div');
+        notesGrid.className = 'notes-grid';
+        // 9 small spans for digits 1..9
+        for (let d = 1; d <= 9; d++) {
+          const span = document.createElement('span');
+          span.className = 'note-digit empty';
+          span.dataset.note = d;
+          notesGrid.appendChild(span);
+        }
+        cell.appendChild(notesGrid);
+
+        cell.addEventListener('click', () => onCellClick(r, c));
+        boardEl.appendChild(cell);
+      }
+    }
+  }
+
+  /**
+   * Get a reference to a cell element.
+   * @param {number} r
+   * @param {number} c
+   * @returns {HTMLElement}
+   */
+  function getCell(r, c) {
+    return boardEl.querySelector(`.cell[data-row="${r}"][data-col="${c}"]`);
+  }
+
+  /**
+   * Fully re-render a single cell's visual state.
+   * @param {number} r
+   * @param {number} c
+   */
+  function renderCell(r, c) {
+    const cell = getCell(r, c);
+    if (!cell) return;
+
+    const val = board[r][c];
+    const clue = isClue[r][c];
+    const notesGrid = cell.querySelector('.notes-grid');
+
+    // Classes
+    cell.className = 'cell';  // Reset
+    if (clue) {
+      cell.classList.add('clue');
+    } else {
+      cell.classList.add('user');
+      // Show error if needed
+      if (showErrors && val !== 0 && val !== solution[r][c]) {
+        cell.classList.add('error');
+      }
+    }
+
+    // Apply highlight
+    applyHighlightClass(r, c, cell);
+
+    // Content: value vs notes
+    if (val !== 0) {
+      // Show digit, hide notes
+      notesGrid.style.display = 'none';
+      // Remove old main-digit text node if present
+      let textNode = cell.querySelector('.main-digit');
+      if (!textNode) {
+        textNode = document.createElement('span');
+        textNode.className = 'main-digit';
+        cell.appendChild(textNode);
+      }
+      textNode.textContent = val;
+    } else {
+      // Show notes grid
+      notesGrid.style.display = 'grid';
+      const noteSet = notes[r][c];
+      notesGrid.querySelectorAll('.note-digit').forEach(span => {
+        const d = Number(span.dataset.note);
+        if (noteSet.has(d)) {
+          span.textContent = d;
+          span.classList.remove('empty');
+        } else {
+          span.textContent = '';
+          span.classList.add('empty');
+        }
+      });
+
+      // Remove main digit span
+      const textNode = cell.querySelector('.main-digit');
+      if (textNode) textNode.remove();
+    }
+  }
+
+  /**
+   * Determine and apply the correct highlight CSS class to a cell element.
+   * @param {number} r
+   * @param {number} c
+   * @param {HTMLElement} cell
+   */
+  function applyHighlightClass(r, c, cell) {
+    // Remove all highlight classes
+    cell.classList.remove('highlight-selected', 'highlight-same', 'highlight-related');
+
+    if (selRow === -1) return;
+
+    const selVal = board[selRow][selCol];
+
+    if (r === selRow && c === selCol) {
+      cell.classList.add('highlight-selected');
+      return;
+    }
+
+    // Check same number highlight (only non-zero)
+    if (
+      selVal !== 0 &&
+      board[r][c] === selVal
+    ) {
+      cell.classList.add('highlight-same');
+      return;
+    }
+
+    // Check same row / col / box
+    const sameRow = r === selRow;
+    const sameCol = c === selCol;
+    const sameBox =
+      Math.floor(r / 3) === Math.floor(selRow / 3) &&
+      Math.floor(c / 3) === Math.floor(selCol / 3);
+
+    if (sameRow || sameCol || sameBox) {
+      cell.classList.add('highlight-related');
+    }
+  }
+
+  /**
+   * Re-render all 81 cells' highlight states without touching content.
+   */
+  function refreshHighlights() {
+    for (let r = 0; r < 9; r++) {
+      for (let c = 0; c < 9; c++) {
+        const cell = getCell(r, c);
+        applyHighlightClass(r, c, cell);
+      }
+    }
+  }
+
+  /**
+   * Re-render the entire board (content + highlights).
+   */
+  function renderBoard() {
+    for (let r = 0; r < 9; r++) {
+      for (let c = 0; c < 9; c++) {
+        renderCell(r, c);
+      }
+    }
+  }
+
+  /* ============================================================
+   * SECTION 7 — Numpad Rendering
+   * ============================================================ */
+
+  /**
+   * Build virtual numpad 1-9 + Erase.
+   */
+  function buildNumpad() {
+    numpadEl.innerHTML = '';
+    for (let d = 1; d <= 9; d++) {
+      const btn = document.createElement('button');
+      btn.className = 'num-btn';
+      btn.dataset.digit = d;
+      btn.setAttribute('aria-label', `数字 ${d}`);
+
+      const numSpan = document.createElement('span');
+      numSpan.textContent = d;
+      btn.appendChild(numSpan);
+
+      const countSpan = document.createElement('span');
+      countSpan.className = 'num-count';
+      countSpan.id = `count-${d}`;
+      btn.appendChild(countSpan);
+
+      btn.addEventListener('click', () => inputDigit(d));
+      numpadEl.appendChild(btn);
+    }
+    // Erase button
+    const eraseBtn = document.createElement('button');
+    eraseBtn.className = 'num-btn erase';
+    eraseBtn.setAttribute('aria-label', '清除');
+    eraseBtn.textContent = '✕';
+    eraseBtn.addEventListener('click', () => inputDigit(0));
+    numpadEl.appendChild(eraseBtn);
+  }
+
+  /**
+   * Update digit count badges on the numpad.
+   * Each digit shows how many times it still needs to be placed (9 total - already placed).
+   */
+  function updateDigitCounts() {
+    const counts = Array(10).fill(0);  // counts[1..9]
+    for (let r = 0; r < 9; r++) {
+      for (let c = 0; c < 9; c++) {
+        if (board[r][c] !== 0) counts[board[r][c]]++;
+      }
+    }
+    for (let d = 1; d <= 9; d++) {
+      const el = document.getElementById(`count-${d}`);
+      if (el) {
+        const remaining = 9 - counts[d];
+        el.textContent = remaining > 0 ? remaining : '';
+      }
+    }
+  }
+
+  /* ============================================================
+   * SECTION 8 — Input Handling
+   * ============================================================ */
+
+  /**
+   * Handle cell click.
+   * @param {number} r
+   * @param {number} c
+   */
+  function onCellClick(r, c) {
+    if (gameOver) return;
+    selRow = r;
+    selCol = c;
+    refreshHighlights();
+  }
+
+  /**
+   * Input a digit (or 0 = erase) into the selected cell.
+   * @param {number} digit - 0..9
+   */
+  function inputDigit(digit) {
+    if (gameOver) return;
+    if (selRow === -1) {
+      showToast('请先选中一个格子');
+      return;
+    }
+    const r = selRow;
+    const c = selCol;
+
+    // Cannot modify clues
+    if (isClue[r][c]) {
+      showToast('提示格不可修改');
+      return;
+    }
+
+    if (noteMode && digit !== 0) {
+      // ---- Note mode ----
+      const noteSet = notes[r][c];
+      const prevNotes = [...noteSet];
+
+      if (noteSet.has(digit)) {
+        noteSet.delete(digit);
+      } else {
+        noteSet.add(digit);
+      }
+
+      const nextNotes = [...noteSet];
+      undoStack.push({ r, c, prev: board[r][c], next: board[r][c], prevNotes, nextNotes, isNote: true, wasWrong: false, clearedNotes: [] });
+      renderCell(r, c);
+    } else {
+      // ---- Fill mode ----
+      if (digit === 0) {
+        // Erase
+        if (board[r][c] === 0 && notes[r][c].size === 0) return;
+        const prevVal = board[r][c];
+        const prevNotes = [...notes[r][c]];
+        board[r][c] = 0;
+        notes[r][c] = new Set();
+        undoStack.push({ r, c, prev: prevVal, next: 0, prevNotes, nextNotes: [], isNote: false, wasWrong: false, clearedNotes: [] });
+        // Recalculate showErrors: hide errors only if no wrong values remain on board
+        showErrors = false;
+        for (let r2 = 0; r2 < 9; r2++) {
+          for (let c2 = 0; c2 < 9; c2++) {
+            if (!isClue[r2][c2] && board[r2][c2] !== 0 && board[r2][c2] !== solution[r2][c2]) {
+              showErrors = true;
+              break;
+            }
+          }
+          if (showErrors) break;
+        }
+      } else {
+        const prevVal = board[r][c];
+        const prevNotes = [...notes[r][c]];
+        board[r][c] = digit;
+        notes[r][c] = new Set();  // Clear notes when a digit is filled
+
+        // Auto real-time validation: track mistakes
+        if (digit !== solution[r][c]) {
+          mistakes++;
+          mistakeEl.textContent = `错误: ${mistakes}`;
+          showErrors = true;
+          undoStack.push({ r, c, prev: prevVal, next: digit, prevNotes, nextNotes: [], isNote: false, wasWrong: true, clearedNotes: [] });
+        } else {
+          // Remove notes of this digit from same row, col, box
+          const clearedNotes = clearRelatedNotes(r, c, digit);
+          undoStack.push({ r, c, prev: prevVal, next: digit, prevNotes, nextNotes: [], isNote: false, wasWrong: false, clearedNotes });
+          // Check completion
+          if (isBoardComplete()) {
+            handleCompletion();
+            renderBoard();
+            updateDigitCounts();
+            return;
+          }
+        }
+      }
+      renderBoard();
+      updateDigitCounts();
+    }
+  }
+
+  /**
+   * When a correct digit is placed at (r,c), remove it from notes
+   * in the same row, column, and 3×3 box.
+   * @param {number} r
+   * @param {number} c
+   * @param {number} digit
+   */
+  function clearRelatedNotes(r, c, digit) {
+    const cleared = [];
+    const br = Math.floor(r / 3) * 3;
+    const bc = Math.floor(c / 3) * 3;
+
+    for (let i = 0; i < 9; i++) {
+      if (notes[r][i].has(digit)) {
+        notes[r][i].delete(digit);
+        cleared.push({ r: r, c: i, digit });
+      }
+      if (notes[i][c].has(digit)) {
+        notes[i][c].delete(digit);
+        cleared.push({ r: i, c: c, digit });
+      }
+    }
+    for (let rr = br; rr < br + 3; rr++) {
+      for (let cc = bc; cc < bc + 3; cc++) {
+        if (notes[rr][cc].has(digit)) {
+          notes[rr][cc].delete(digit);
+          cleared.push({ r: rr, c: cc, digit });
+        }
+      }
+    }
+    return cleared;
+  }
+
+  /**
+   * Check if the board is fully and correctly filled.
+   * @returns {boolean}
+   */
+  function isBoardComplete() {
+    for (let r = 0; r < 9; r++) {
+      for (let c = 0; c < 9; c++) {
+        if (board[r][c] !== solution[r][c]) return false;
+      }
+    }
+    return true;
+  }
+
+  /* ============================================================
+   * SECTION 9 — Undo
+   * ============================================================ */
+
+  function performUndo() {
+    if (undoStack.length === 0) {
+      showToast('没有可撤销的操作');
+      return;
+    }
+    const entry = undoStack.pop();
+    const { r, c, prev, prevNotes, isNote, wasWrong, clearedNotes } = entry;
+
+    if (isNote) {
+      notes[r][c] = new Set(prevNotes);
+    } else {
+      board[r][c] = prev;
+      notes[r][c] = new Set(prevNotes);
+      // Decrement mistakes if the undone operation was a wrong answer
+      if (wasWrong && mistakes > 0) {
+        mistakes--;
+        mistakeEl.textContent = mistakes > 0 ? `错误: ${mistakes}` : '';
+      }
+      // Restore notes that were auto-cleared in related cells
+      if (clearedNotes) {
+        for (const change of clearedNotes) {
+          notes[change.r][change.c].add(change.digit);
+        }
+      }
+      // Recalculate showErrors based on remaining errors on the board
+      showErrors = false;
+      for (let r2 = 0; r2 < 9; r2++) {
+        for (let c2 = 0; c2 < 9; c2++) {
+          if (!isClue[r2][c2] && board[r2][c2] !== 0 && board[r2][c2] !== solution[r2][c2]) {
+            showErrors = true;
+            break;
+          }
+        }
+        if (showErrors) break;
+      }
+    }
+
+    selRow = r;
+    selCol = c;
+    renderBoard();
+    refreshHighlights();
+    updateDigitCounts();
+  }
+
+  /* ============================================================
+   * SECTION 10 — Hint
+   * ============================================================ */
+
+  function performHint() {
+    if (gameOver) return;
+
+    // Collect all empty (or wrong) non-clue cells
+    const candidates = [];
+    for (let r = 0; r < 9; r++) {
+      for (let c = 0; c < 9; c++) {
+        if (!isClue[r][c] && board[r][c] !== solution[r][c]) {
+          candidates.push([r, c]);
+        }
+      }
+    }
+
+    if (candidates.length === 0) {
+      showToast('棋盘已完成！');
+      return;
+    }
+
+    // Pick a random candidate (or the selected cell if it's a candidate)
+    let target = null;
+    if (selRow !== -1 && !isClue[selRow][selCol] && board[selRow][selCol] !== solution[selRow][selCol]) {
+      target = [selRow, selCol];
+    } else {
+      target = candidates[Math.floor(Math.random() * candidates.length)];
+    }
+
+    const [r, c] = target;
+    const prevVal = board[r][c];
+    const prevNotes = [...notes[r][c]];
+    board[r][c] = solution[r][c];
+    notes[r][c] = new Set();
+    const clearedNotes = clearRelatedNotes(r, c, solution[r][c]);
+    undoStack.push({ r, c, prev: prevVal, next: solution[r][c], prevNotes, nextNotes: [], isNote: false, wasWrong: false, clearedNotes });
+    selRow = r;
+    selCol = c;
+
+    renderBoard();
+    refreshHighlights();
+    updateDigitCounts();
+    showToast('提示：已填入一个数字');
+
+    if (isBoardComplete()) handleCompletion();
+  }
+
+  /* ============================================================
+   * SECTION 11 — Check
+   * ============================================================ */
+
+  function performCheck() {
+    showErrors = true;
+    renderBoard();
+
+    // Count errors
+    let errorCount = 0;
+    for (let r = 0; r < 9; r++) {
+      for (let c = 0; c < 9; c++) {
+        if (!isClue[r][c] && board[r][c] !== 0 && board[r][c] !== solution[r][c]) {
+          errorCount++;
+        }
+      }
+    }
+    if (errorCount === 0) {
+      showToast('太棒了！目前没有错误 ✅');
+    } else {
+      showToast(`发现 ${errorCount} 处错误，已用红色标出`);
+    }
+  }
+
+  /* ============================================================
+   * SECTION 12 — Completion
+   * ============================================================ */
+
+  function handleCompletion() {
+    gameOver = true;
+    stopTimer();
+    finalTimeEl.textContent = formatTime(timerSeconds);
+    overlay.classList.add('show');
+  }
+
+  /* ============================================================
+   * SECTION 13 — New Game
+   * ============================================================ */
+
+  function startNewGame() {
+    gameOver = false;
+    showErrors = false;
+    mistakes = 0;
+    undoStack = [];
+    selRow = -1;
+    selCol = -1;
+    noteMode = false;
+    mistakeEl.textContent = '';
+
+    noteBtn.textContent = '✏️ 备注模式';
+    noteBtn.classList.remove('active');
+
+    overlay.classList.remove('show');
+
+    // Generate puzzle
+    const result = generatePuzzle(currentDifficulty);
+    puzzle   = result.puzzle;
+    solution = result.solution;
+
+    // Copy puzzle to board
+    board = copyBoard(puzzle);
+
+    // Build clue mask
+    isClue = Array.from({ length: 9 }, (_, r) =>
+      Array.from({ length: 9 }, (_, c) => puzzle[r][c] !== 0)
+    );
+
+    // Init notes
+    notes = Array.from({ length: 9 }, () =>
+      Array.from({ length: 9 }, () => new Set())
+    );
+
+    startTimer();
+    renderBoard();
+    updateDigitCounts();
+  }
+
+  /* ============================================================
+   * SECTION 14 — Keyboard Input
+   * ============================================================ */
+
+  document.addEventListener('keydown', (e) => {
+    if (gameOver) return;
+
+    // Arrow key navigation
+    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+      e.preventDefault();
+      if (selRow === -1) { selRow = 0; selCol = 0; }
+      else {
+        if (e.key === 'ArrowUp'    && selRow > 0) selRow--;
+        if (e.key === 'ArrowDown'  && selRow < 8) selRow++;
+        if (e.key === 'ArrowLeft'  && selCol > 0) selCol--;
+        if (e.key === 'ArrowRight' && selCol < 8) selCol++;
+      }
+      refreshHighlights();
+      return;
+    }
+
+    // Digit keys 1-9
+    if (e.key >= '1' && e.key <= '9') {
+      inputDigit(Number(e.key));
+      return;
+    }
+
+    // Delete / Backspace — erase
+    if (e.key === 'Delete' || e.key === 'Backspace') {
+      inputDigit(0);
+      return;
+    }
+
+    // 'n' or 'N' — toggle note mode
+    if (e.key === 'n' || e.key === 'N') {
+      toggleNoteMode();
+    }
+
+    // 'z' or ctrl+z — undo
+    if ((e.key === 'z' || e.key === 'Z') && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      performUndo();
+    }
+  });
+
+  /* ============================================================
+   * SECTION 15 — Note Mode Toggle
+   * ============================================================ */
+
+  function toggleNoteMode() {
+    noteMode = !noteMode;
+    if (noteMode) {
+      noteBtn.textContent = '✏️ 填数模式';
+      noteBtn.classList.add('active');
+    } else {
+      noteBtn.textContent = '✏️ 备注模式';
+      noteBtn.classList.remove('active');
+    }
+  }
+
+  /* ============================================================
+   * SECTION 16 — Difficulty Buttons
+   * ============================================================ */
+
+  document.querySelectorAll('.diff-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentDifficulty = btn.dataset.diff;
+      startNewGame();
+    });
+  });
+
+  /* ============================================================
+   * SECTION 17 — Action Button Listeners
+   * ============================================================ */
+
+  newGameBtn.addEventListener('click',  () => startNewGame());
+  noteBtn.addEventListener('click',     () => toggleNoteMode());
+  undoBtnEl.addEventListener('click',   () => performUndo());
+  hintBtnEl.addEventListener('click',   () => performHint());
+  checkBtnEl.addEventListener('click',  () => performCheck());
+  playAgainBtn.addEventListener('click',() => startNewGame());
+
+  /* ============================================================
+   * SECTION 18 — Init
+   * ============================================================ */
+
+  buildBoardDOM();
+  buildNumpad();
+  startNewGame();
+
+</script>
+</body>
+</html>
